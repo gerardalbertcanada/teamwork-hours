@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>9Cloud — Weekly Hours Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0c1222 0%, #1a1f35 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    .dashboard { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+    }
+    .header h1 {
+      font-size: 24px; font-weight: 700;
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-sub { color: #64748b; font-size: 13px; margin-top: 2px; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+
+    .btn {
+      padding: 8px 18px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; font-family: inherit;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+      color: #fff;
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .last-updated { font-size: 11px; color: #475569; }
+
+    .week-banner {
+      background: rgba(6,182,212,0.08);
+      border: 1px solid rgba(6,182,212,0.2);
+      border-radius: 10px; padding: 12px 18px;
+      margin-bottom: 24px; font-size: 13px; color: #94a3b8;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    }
+    .week-banner strong { color: #e2e8f0; }
+
+    /* Stats Row */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px; margin-bottom: 24px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 16px; text-align: center;
+    }
+    .stat-value {
+      font-size: 26px; font-weight: 700;
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .stat-value.purple { background: linear-gradient(135deg, #8b5cf6, #a78bfa); -webkit-background-clip: text; }
+    .stat-value.green { background: linear-gradient(135deg, #10b981, #34d399); -webkit-background-clip: text; }
+    .stat-value.amber { background: linear-gradient(135deg, #f59e0b, #fbbf24); -webkit-background-clip: text; }
+    .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; font-weight: 500; }
+
+    /* Chart */
+    .chart-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 20px;
+      margin-bottom: 24px;
+    }
+    .chart-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .chart-subtitle { font-size: 12px; color: #64748b; margin-bottom: 16px; }
+
+    /* Table */
+    .table-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .table-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 15px; font-weight: 600;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 20px; font-size: 13px; }
+    th {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+      color: #64748b; font-weight: 600;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    td.hours { font-weight: 600; color: #e2e8f0; }
+    td.rank { color: #475569; width: 40px; }
+
+    .no-data { text-align: center; padding: 40px; color: #475569; font-size: 14px; }
+
+    /* Loading */
+    .loading-state {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 80px 20px; gap: 16px;
+    }
+    .spinner {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #06b6d4;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { color: #64748b; font-size: 14px; }
+
+    .error-banner {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 10px; padding: 14px 20px;
+      margin-bottom: 20px; color: #f87171; font-size: 13px;
+    }
+
+    .footer {
+      text-align: center; padding: 20px; font-size: 12px; color: #475569;
+    }
+    .footer span { color: #06b6d4; }
+
+    @media (max-width: 768px) {
+      .dashboard { padding: 12px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      th, td { padding: 8px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script crossorigin src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
+  <script crossorigin src="https://unpkg.com/recharts@2.1.16/umd/Recharts.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback } = React;
+    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } = Recharts;
+
+    const API_BASE = '/api/teamwork';
+
+    // Fixed staff roster — only these people are shown on the dashboard,
+    // even if they logged zero hours last week.
+    const STAFF = [
+      { id: 90852,  label: 'Mary Lynn' },
+      { id: 109919, label: 'Salim' },
+      { id: 608372, label: 'Isha' },
+      { id: 360446, label: 'Nusrat' },
+      { id: 360448, label: 'Ashraf' },
+      { id: 610444, label: 'Carina' },
+      { id: 593117, label: 'Gerard' },
+      { id: 205276, label: 'Mark' },
+      { id: 90854,  label: 'Anne Katherine' },
+      { id: 216554, label: 'Wasim' },
+      { id: 577282, label: 'Pankaj' },
+    ];
+
+    const COLORS = ['#06b6d4', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#84cc16', '#f97316', '#38bdf8'];
+
+    function api(endpoint, params = {}) {
+      const query = new URLSearchParams({ endpoint, ...params });
+      return fetch(`${API_BASE}?${query}`).then(r => {
+        if (!r.ok) throw new Error(`API ${r.status}`);
+        return r.json();
+      });
+    }
+
+    // Fetch all pages for a paginated endpoint
+    async function fetchAllPages(endpoint, key, params = {}, onProgress) {
+      const first = await api(endpoint, { ...params, page: '1', pageSize: '250' });
+      let allItems = first[key] || [];
+      const totalPages = (first._pagination && first._pagination.pages) || 1;
+      if (onProgress) onProgress(1, totalPages);
+
+      if (totalPages <= 1) return allItems;
+
+      const batchSize = 5;
+      for (let start = 2; start <= totalPages; start += batchSize) {
+        const end = Math.min(start + batchSize - 1, totalPages);
+        const batch = [];
+        for (let p = start; p <= end; p++) {
+          batch.push(api(endpoint, { ...params, page: String(p), pageSize: '250' }));
+        }
+        const results = await Promise.all(batch);
+        results.forEach(r => { allItems = allItems.concat(r[key] || []); });
+        if (onProgress) onProgress(end, totalPages);
+      }
+      return allItems;
+    }
+
+    function toYYYYMMDD(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}${m}${day}`;
+    }
+
+    function formatDate(d) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // The most recently completed Mon–Sun week, relative to today.
+    // If today is Monday 9/14, this resolves to Mon 9/7 – Sun 9/13.
+    function getPreviousWeekRange() {
+      const now = new Date();
+      const dow = now.getDay(); // 0 = Sun, 1 = Mon, ... 6 = Sat
+      const diffToMonday = dow === 0 ? 6 : dow - 1;
+      const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+      const prevMonday = new Date(thisMonday);
+      prevMonday.setDate(thisMonday.getDate() - 7);
+      const prevSunday = new Date(thisMonday);
+      prevSunday.setDate(thisMonday.getDate() - 1);
+      return { start: prevMonday, end: prevSunday };
+    }
+
+    function WeeklyHoursDashboard() {
+      const [timeEntries, setTimeEntries] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [loadingMsg, setLoadingMsg] = useState('Loading last week\u2019s hours\u2026');
+      const [error, setError] = useState(null);
+      const [lastUpdated, setLastUpdated] = useState(null);
+
+      const { start: weekStart, end: weekEnd } = useMemo(getPreviousWeekRange, []);
+
+      const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          setLoadingMsg('Loading last week\u2019s time entries\u2026');
+          const entries = await fetchAllPages(
+            'time_entries.json', 'time-entries',
+            { fromdate: toYYYYMMDD(weekStart), todate: toYYYYMMDD(weekEnd) },
+            (p, t) => setLoadingMsg(`Loading time entries... page ${p}/${t}`)
+          );
+          setTimeEntries(entries);
+          setLastUpdated(new Date());
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+          setLoadingMsg('');
+        }
+      }, [weekStart, weekEnd]);
+
+      useEffect(() => { fetchData(); }, [fetchData]);
+
+      // Aggregate hours per roster member (always shows all 11, even at 0h)
+      const chartData = useMemo(() => {
+        const map = {};
+        STAFF.forEach((s, i) => {
+          map[s.id] = { id: s.id, name: s.label, hours: 0, color: COLORS[i % COLORS.length] };
+        });
+        timeEntries.forEach(entry => {
+          const pid = Number(entry['person-id']);
+          if (map[pid]) {
+            map[pid].hours += parseFloat(entry.hoursDecimal) || 0;
+          }
+        });
+        return Object.values(map)
+          .map(d => ({ ...d, hours: Math.round(d.hours * 100) / 100 }))
+          .sort((a, b) => b.hours - a.hours);
+      }, [timeEntries]);
+
+      const totalHours = useMemo(
+        () => chartData.reduce((sum, d) => sum + d.hours, 0),
+        [chartData]
+      );
+      const activeCount = chartData.filter(d => d.hours > 0).length;
+      const topPerformer = chartData[0];
+      const avgHours = activeCount > 0 ? totalHours / activeCount : 0;
+
+      const CustomTooltip = ({ active, payload }) => {
+        if (!active || !payload?.length) return null;
+        const data = payload[0]?.payload;
+        return (
+          <div style={{
+            background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 8, padding: '10px 14px', fontSize: 13,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{data?.name}</div>
+            <div style={{ color: '#94a3b8' }}>{data?.hours}h logged</div>
+          </div>
+        );
+      };
+
+      return (
+        <div className="dashboard">
+          <div className="header">
+            <div>
+              <h1>☁ Weekly Hours Dashboard</h1>
+              <div className="header-sub">Hours logged per staff member, last week</div>
+            </div>
+            <div className="header-actions">
+              {lastUpdated && <span className="last-updated">Updated {lastUpdated.toLocaleTimeString()}</span>}
+              <button className="btn btn-primary" onClick={fetchData} disabled={loading}>
+                {loading ? '⟳ Loading…' : '↻ Refresh'}
+              </button>
+            </div>
+          </div>
+
+          <div className="week-banner">
+            <span>Showing: <strong>{formatDate(weekStart)} – {formatDate(weekEnd)}</strong></span>
+            <span>Roster: {STAFF.length} staff members</span>
+          </div>
+
+          {error && (
+            <div className="error-banner">
+              ⚠ Failed to load data: {error}. Check your API configuration and try refreshing.
+            </div>
+          )}
+
+          {loading ? (
+            <div className="loading-state">
+              <div className="spinner" />
+              <div className="loading-text">{loadingMsg}</div>
+            </div>
+          ) : (
+            <>
+              <div className="stats-row">
+                <div className="stat-card">
+                  <div className="stat-value">{totalHours.toFixed(1)}h</div>
+                  <div className="stat-label">Total Hours</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value green">{activeCount}</div>
+                  <div className="stat-label">Staff w/ Logged Hours</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value amber">{avgHours.toFixed(1)}h</div>
+                  <div className="stat-label">Avg per Active Staff</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value purple">{topPerformer ? topPerformer.name : '—'}</div>
+                  <div className="stat-label">Most Hours ({topPerformer ? topPerformer.hours : 0}h)</div>
+                </div>
+              </div>
+
+              <div className="chart-card">
+                <div className="chart-title">Hours Logged by Staff</div>
+                <div className="chart-subtitle">{formatDate(weekStart)} – {formatDate(weekEnd)}</div>
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={Math.max(320, chartData.length * 40)}>
+                    <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 40, top: 5, bottom: 5 }}>
+                      <XAxis type="number" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="name" width={120}
+                        tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(6,182,212,0.06)' }} />
+                      <Bar dataKey="hours" name="Hours" radius={[0, 4, 4, 0]} barSize={20}>
+                        <LabelList dataKey="hours" position="right" formatter={v => `${v}h`} style={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 600 }} />
+                        {chartData.map((d, i) => <Recharts.Cell key={i} fill={d.color} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="no-data">No data to display</div>
+                )}
+              </div>
+
+              <div className="table-card">
+                <div className="table-header">Hours Breakdown</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Staff Member</th>
+                      <th>Hours Logged</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chartData.map((d, i) => (
+                      <tr key={d.id}>
+                        <td className="rank">{i + 1}</td>
+                        <td>{d.name}</td>
+                        <td className="hours">{d.hours.toFixed(2)}h</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="footer">
+                Connected to <span>9cloudwebworks.teamwork.com</span>
+                {lastUpdated && <> • Data synced {lastUpdated.toLocaleString()}</>}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<WeeklyHoursDashboard />, document.getElementById('root'));
+  </script>
+</body>
+</html>
