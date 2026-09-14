@@ -51,26 +51,6 @@
     }
     .week-banner strong { color: #e2e8f0; }
 
-    /* Stats Row */
-    .stats-row {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 12px; margin-bottom: 24px;
-    }
-    .stat-card {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px; padding: 16px; text-align: center;
-    }
-    .stat-value {
-      font-size: 26px; font-weight: 700;
-      background: linear-gradient(135deg, #06b6d4, #8b5cf6);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }
-    .stat-value.purple { background: linear-gradient(135deg, #8b5cf6, #a78bfa); -webkit-background-clip: text; }
-    .stat-value.green { background: linear-gradient(135deg, #10b981, #34d399); -webkit-background-clip: text; }
-    .stat-value.amber { background: linear-gradient(135deg, #f59e0b, #fbbf24); -webkit-background-clip: text; }
-    .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; font-weight: 500; }
-
     /* Chart */
     .chart-card {
       background: rgba(255,255,255,0.05);
@@ -137,7 +117,6 @@
 
     @media (max-width: 768px) {
       .dashboard { padding: 12px; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
       th, td { padding: 8px 12px; }
     }
   </style>
@@ -279,14 +258,6 @@
           .sort((a, b) => b.hours - a.hours);
       }, [timeEntries]);
 
-      const totalHours = useMemo(
-        () => chartData.reduce((sum, d) => sum + d.hours, 0),
-        [chartData]
-      );
-      const activeCount = chartData.filter(d => d.hours > 0).length;
-      const topPerformer = chartData[0];
-      const avgHours = activeCount > 0 ? totalHours / activeCount : 0;
-
       const CustomTooltip = ({ active, payload }) => {
         if (!active || !payload?.length) return null;
         const data = payload[0]?.payload;
@@ -335,25 +306,6 @@
             </div>
           ) : (
             <>
-              <div className="stats-row">
-                <div className="stat-card">
-                  <div className="stat-value">{totalHours.toFixed(1)}h</div>
-                  <div className="stat-label">Total Hours</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-value green">{activeCount}</div>
-                  <div className="stat-label">Staff w/ Logged Hours</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-value amber">{avgHours.toFixed(1)}h</div>
-                  <div className="stat-label">Avg per Active Staff</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-value purple">{topPerformer ? topPerformer.name : '—'}</div>
-                  <div className="stat-label">Most Hours ({topPerformer ? topPerformer.hours : 0}h)</div>
-                </div>
-              </div>
-
               <div className="chart-card">
                 <div className="chart-title">Hours Logged by Staff</div>
                 <div className="chart-subtitle">{formatDate(weekStart)} – {formatDate(weekEnd)}</div>
