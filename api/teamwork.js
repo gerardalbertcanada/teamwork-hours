@@ -35,6 +35,22 @@ export default async function handler(req, res) {
       data = { raw: text };
     }
 
+    // Teamwork's v1 API puts paging info in response HEADERS
+    // (x-page / x-pages / x-records), not in the JSON body — true for
+    // time_entries.json, tasks.json, and people.json alike. Attach it
+    // to the body as `_pagination` so the frontend's pager can read it
+    // the same way regardless of endpoint.
+    const xPage = response.headers.get('x-page');
+    const xPages = response.headers.get('x-pages');
+    const xRecords = response.headers.get('x-records') || response.headers.get('x-total-records');
+    if (xPage !== null || xPages !== null || xRecords !== null) {
+      data._pagination = {
+        page: xPage ? Number(xPage) : undefined,
+        pages: xPages ? Number(xPages) : undefined,
+        records: xRecords ? Number(xRecords) : undefined,
+      };
+    }
+
     res.status(response.status).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
