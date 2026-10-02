@@ -61,7 +61,7 @@
     .chart-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
     .chart-subtitle { font-size: 12px; color: #64748b; margin-bottom: 16px; }
 
-    /* Table */
+    /* Accordion */
     .table-card {
       background: rgba(255,255,255,0.05);
       border: 1px solid rgba(255,255,255,0.08);
@@ -73,18 +73,39 @@
       border-bottom: 1px solid rgba(255,255,255,0.06);
       font-size: 15px; font-weight: 600;
     }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 10px 20px; font-size: 13px; }
-    th {
-      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
-      color: #64748b; font-weight: 600;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+    .accordion-item { border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .accordion-item:last-child { border-bottom: none; }
+    .accordion-trigger {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 14px 20px; background: none; border: none; cursor: pointer;
+      font-family: inherit; color: #e2e8f0; text-align: left; transition: background 0.15s;
     }
-    tbody tr { border-bottom: 1px solid rgba(255,255,255,0.04); }
-    tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: rgba(255,255,255,0.03); }
-    td.hours { font-weight: 600; color: #e2e8f0; }
-    td.rank { color: #475569; width: 40px; }
+    .accordion-trigger:hover { background: rgba(255,255,255,0.03); }
+    .accordion-trigger-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .accordion-chevron {
+      flex-shrink: 0; width: 16px; height: 16px; color: #64748b;
+      transition: transform 0.2s;
+    }
+    .accordion-chevron.open { transform: rotate(90deg); color: #06b6d4; }
+    .accordion-rank { color: #475569; font-size: 13px; width: 20px; flex-shrink: 0; }
+    .accordion-name { font-size: 13px; font-weight: 500; }
+    .accordion-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .accordion-task-count { font-size: 11px; color: #64748b; }
+    .accordion-hours { font-size: 13px; font-weight: 600; color: #e2e8f0; min-width: 56px; text-align: right; }
+    .accordion-body { padding: 0 20px 14px 46px; display: flex; flex-direction: column; gap: 2px; }
+    .accordion-task-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; padding: 7px 10px; border-radius: 6px; font-size: 12.5px;
+    }
+    .accordion-task-row:hover { background: rgba(255,255,255,0.03); }
+    .accordion-task-link {
+      color: #94a3b8; text-decoration: none; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .accordion-task-link:hover { color: #06b6d4; text-decoration: underline; }
+    .accordion-task-noLink { color: #64748b; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .accordion-task-hours { color: #94a3b8; flex-shrink: 0; }
+    .accordion-empty { padding: 7px 10px; font-size: 12.5px; color: #475569; }
 
     .no-data { text-align: center; padding: 40px; color: #475569; font-size: 14px; }
 
@@ -117,7 +138,7 @@
 
     @media (max-width: 768px) {
       .dashboard { padding: 12px; }
-      th, td { padding: 8px 12px; }
+      .accordion-body { padding-left: 32px; }
     }
   </style>
 </head>
@@ -153,6 +174,11 @@
     ];
 
     const COLORS = ['#06b6d4', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#84cc16', '#f97316', '#38bdf8'];
+
+    const TEAMWORK_DOMAIN = 'https://9cloudwebworks.teamwork.com';
+    function taskUrl(taskId) {
+      return `${TEAMWORK_DOMAIN}/app/tasks/${taskId}`;
+    }
 
     function api(endpoint, params = {}) {
       const query = new URLSearchParams({ endpoint, ...params });
@@ -216,8 +242,13 @@
       const [loadingMsg, setLoadingMsg] = useState('Loading last week\u2019s hours\u2026');
       const [error, setError] = useState(null);
       const [lastUpdated, setLastUpdated] = useState(null);
+      const [expanded, setExpanded] = useState({});
 
       const { start: weekStart, end: weekEnd } = useMemo(getPreviousWeekRange, []);
+
+      const toggleExpanded = (personId) => {
+        setExpanded(prev => ({ ...prev, [personId]: !prev[personId] }));
+      };
 
       const fetchData = useCallback(async () => {
         setLoading(true);
@@ -256,6 +287,31 @@
         return Object.values(map)
           .map(d => ({ ...d, hours: Math.round(d.hours * 100) / 100 }))
           .sort((a, b) => b.hours - a.hours);
+      }, [timeEntries]);
+
+      // Per-person breakdown by individual task, for the accordion —
+      // each task entry links back to Teamwork.
+      const tasksByPerson = useMemo(() => {
+        const map = {};
+        STAFF.forEach(s => { map[s.id] = {}; });
+        timeEntries.forEach(entry => {
+          const pid = Number(entry['person-id']);
+          if (!(pid in map)) return;
+          const taskId = entry['todo-item-id'] || null;
+          const taskName = entry['todo-item-name'] || entry.description || 'Untitled time entry';
+          const key = taskId || `no-task-${taskName}`;
+          if (!map[pid][key]) {
+            map[pid][key] = { taskId, taskName, hours: 0 };
+          }
+          map[pid][key].hours += parseFloat(entry.hoursDecimal) || 0;
+        });
+        const result = {};
+        Object.keys(map).forEach(pid => {
+          result[pid] = Object.values(map[pid])
+            .map(t => ({ ...t, hours: Math.round(t.hours * 100) / 100 }))
+            .sort((a, b) => b.hours - a.hours);
+        });
+        return result;
       }, [timeEntries]);
 
       const CustomTooltip = ({ active, payload }) => {
@@ -329,24 +385,51 @@
 
               <div className="table-card">
                 <div className="table-header">Hours Breakdown</div>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Staff Member</th>
-                      <th>Hours Logged</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chartData.map((d, i) => (
-                      <tr key={d.id}>
-                        <td className="rank">{i + 1}</td>
-                        <td>{d.name}</td>
-                        <td className="hours">{d.hours.toFixed(2)}h</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {chartData.map((d, i) => {
+                  const tasks = tasksByPerson[d.id] || [];
+                  const isOpen = !!expanded[d.id];
+                  return (
+                    <div className="accordion-item" key={d.id}>
+                      <button className="accordion-trigger" onClick={() => toggleExpanded(d.id)}>
+                        <span className="accordion-trigger-left">
+                          <svg className={`accordion-chevron ${isOpen ? 'open' : ''}`} viewBox="0 0 16 16" fill="none">
+                            <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <span className="accordion-rank">{i + 1}</span>
+                          <span className="accordion-name">{d.name}</span>
+                        </span>
+                        <span className="accordion-right">
+                          <span className="accordion-task-count">{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+                          <span className="accordion-hours">{d.hours.toFixed(2)}h</span>
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="accordion-body">
+                          {tasks.length > 0 ? tasks.map((t, ti) => (
+                            <div className="accordion-task-row" key={t.taskId || ti}>
+                              {t.taskId ? (
+                                <a
+                                  className="accordion-task-link"
+                                  href={taskUrl(t.taskId)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={t.taskName}
+                                >
+                                  {t.taskName}
+                                </a>
+                              ) : (
+                                <span className="accordion-task-noLink" title={t.taskName}>{t.taskName}</span>
+                              )}
+                              <span className="accordion-task-hours">{t.hours.toFixed(2)}h</span>
+                            </div>
+                          )) : (
+                            <div className="accordion-empty">No time entries logged</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="footer">
