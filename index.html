@@ -247,18 +247,6 @@
       return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
-    // Given any date, return the Mon–Sun week it falls within.
-    // Pick any day in a week (Tue, Fri, whatever) and you get that
-    // week's Monday through Sunday — never a rolling 7-day window.
-    function getWeekRangeForDate(picked) {
-      const dow = picked.getDay(); // 0 = Sun, 1 = Mon, ... 6 = Sat
-      const diffToMonday = dow === 0 ? 6 : dow - 1;
-      const monday = new Date(picked.getFullYear(), picked.getMonth(), picked.getDate() - diffToMonday);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      return { start: monday, end: sunday };
-    }
-
     // Parses a <input type="date"> value ("YYYY-MM-DD") as a LOCAL date,
     // avoiding the UTC-midnight-shifts-a-day-back bug of `new Date(str)`.
     function parseDateInputValue(value) {
@@ -273,21 +261,25 @@
       const [error, setError] = useState(null);
       const [lastUpdated, setLastUpdated] = useState(null);
       const [expanded, setExpanded] = useState({});
-      const [selectedDate, setSelectedDate] = useState(''); // empty = nothing picked yet
+      const [fromDate, setFromDate] = useState(''); // empty = nothing picked yet
+      const [toDate, setToDate] = useState('');
 
-      // Nothing loads until a date is picked. Whatever date is picked,
-      // we resolve it to that date's full Mon–Sun week.
-      const weekRange = useMemo(() => {
-        if (!selectedDate) return null;
-        return getWeekRangeForDate(parseDateInputValue(selectedDate));
-      }, [selectedDate]);
+      // Nothing loads until BOTH ends of the range are picked.
+      const rangeError = fromDate && toDate && fromDate > toDate
+        ? 'From date must be before the To date.'
+        : null;
+
+      const dateRange = useMemo(() => {
+        if (!fromDate || !toDate || rangeError) return null;
+        return { start: parseDateInputValue(fromDate), end: parseDateInputValue(toDate) };
+      }, [fromDate, toDate, rangeError]);
 
       const toggleExpanded = (personId) => {
         setExpanded(prev => ({ ...prev, [personId]: !prev[personId] }));
       };
 
       const fetchData = useCallback(async () => {
-        if (!weekRange) return; // guard: nothing picked yet
+        if (!dateRange) return; // guard: range not complete/valid yet
         setLoading(true);
         setError(null);
         setExpanded({});
@@ -295,7 +287,7 @@
           setLoadingMsg('Loading time entries\u2026');
           const entries = await fetchAllPages(
             'time_entries.json', 'time-entries',
-            { fromdate: toYYYYMMDD(weekRange.start), todate: toYYYYMMDD(weekRange.end) },
+            { fromdate: toYYYYMMDD(dateRange.start), todate: toYYYYMMDD(dateRange.end) },
             (p, t) => setLoadingMsg(`Loading time entries... page ${p}/${t}`)
           );
           setTimeEntries(entries);
@@ -306,14 +298,14 @@
           setLoading(false);
           setLoadingMsg('');
         }
-      }, [weekRange]);
+      }, [dateRange]);
 
-      // Fires only when a date has actually been picked — nothing
-      // loads automatically when the page first opens.
+      // Fires only once both From and To are picked (and valid) —
+      // nothing loads automatically when the page first opens.
       useEffect(() => {
-        if (weekRange) fetchData();
+        if (dateRange) fetchData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [weekRange]);
+      }, [dateRange]);
 
       // Aggregate hours per roster member (always shows all 11, even at 0h)
       const chartData = useMemo(() => {
@@ -377,11 +369,11 @@
           <div className="header">
             <div>
               <h1>☁ Weekly Hours Dashboard</h1>
-              <div className="header-sub">Hours logged per staff member, by week</div>
+              <div className="header-sub">Hours logged per staff member, by date range</div>
             </div>
             <div className="header-actions">
               {lastUpdated && <span className="last-updated">Updated {lastUpdated.toLocaleTimeString()}</span>}
-              <button className="btn btn-primary" onClick={fetchData} disabled={loading || !weekRange}>
+              <button className="btn btn-primary" onClick={fetchData} disabled={loading || !dateRange}>
                 {loading ? '⟳ Loading…' : '↻ Refresh'}
               </button>
             </div>
@@ -389,20 +381,34 @@
 
           <div className="filters">
             <div className="filter-group">
-              <label className="filter-label">Pick a date in the week to view</label>
+              <label className="filter-label">From date</label>
               <input
                 type="date"
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={e => setFromDate(e.target.value)}
               />
             </div>
-            {weekRange && (
+            <div className="filter-group">
+              <label className="filter-label">To date</label>
+              <input
+                type="date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={e => setToDate(e.target.value)}
+              />
+            </div>
+            {dateRange && (
               <div className="week-banner-inline">
-                Week: <strong>{formatDate(weekRange.start)} – {formatDate(weekRange.end)}</strong>
+                Showing: <strong>{formatDate(dateRange.start)} – {formatDate(dateRange.end)}</strong>
                 <span className="week-banner-roster">Roster: {STAFF.length} staff members</span>
               </div>
             )}
           </div>
+
+          {rangeError && (
+            <div className="error-banner">⚠ {rangeError}</div>
+          )}
 
           {error && (
             <div className="error-banner">
@@ -410,9 +416,11 @@
             </div>
           )}
 
-          {!weekRange ? (
+          {!dateRange ? (
             <div className="loading-state" style={{ opacity: 0.6 }}>
-              <div className="loading-text">Pick a date above to load hours for that week</div>
+              <div className="loading-text">
+                {rangeError ? 'Fix the date range above to load hours' : 'Pick a From and To date above to load hours'}
+              </div>
             </div>
           ) : loading ? (
             <div className="loading-state">
@@ -423,7 +431,7 @@
             <>
               <div className="chart-card">
                 <div className="chart-title">Hours Logged by Staff</div>
-                <div className="chart-subtitle">{formatDate(weekRange.start)} – {formatDate(weekRange.end)}</div>
+                <div className="chart-subtitle">{formatDate(dateRange.start)} – {formatDate(dateRange.end)}</div>
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={Math.max(320, chartData.length * 40)}>
                     <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 40, top: 5, bottom: 5 }}>
